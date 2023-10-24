@@ -144,6 +144,7 @@ type ListDagInstanceInput struct {
 type ListTaskInstanceInput struct {
 	IDs      []string
 	DagInsID string
+	TaskID   string
 	Status   []entity.TaskInstanceStatus
 	// query expired tasks(it will calculate task's timeout)
 	Expired     bool

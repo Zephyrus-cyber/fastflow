@@ -176,7 +176,7 @@ func NewTaskInstance(dagInsId string, t Task) *TaskInstance {
 	}
 }
 
-// GetGraphID
+// GetGraphID 注意这里指的不是图的ID，指的是该TaskInstance在图中的TaskID
 func (t *TaskInstance) GetGraphID() string {
 	return t.TaskID
 }

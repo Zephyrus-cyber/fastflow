@@ -39,10 +39,14 @@ func NewDefParser(workerNumber int, taskTimeout time.Duration) *DefParser {
 // Init
 func (p *DefParser) Init() {
 	p.workerWg.Add(1)
+	// 检测被分配到该worker节点且状态为scheduled的dagIns，进行解析批量创建相应的taskIns，以及修改dagIns状态为running，并写回到mongodb中
 	go p.startWatcher(p.watchScheduledDagIns)
 	p.workerWg.Add(1)
+	// 检测dagIns是否有command
 	go p.startWatcher(p.watchDagInsCmd)
 
+	// 启动多个worker对其接收到的taskIns进行解析，将其定位到taskTree中，并从该节点开始dfs寻找下一批可执行的节点提交给executor
+	// 执行完后的taskIns会被推送到某个worker的通道中进行解析
 	for i := 0; i < p.workerNumber; i++ {
 		p.workerWg.Add(1)
 		ch := make(chan *entity.TaskInstance, 50)
@@ -162,6 +166,7 @@ func (p *DefParser) InitialDagIns(dagIns *entity.DagInstance) {
 		return
 	}
 
+	// 返回虚拟根节点，因为每个节点都包含child节点列表，根节点已经可以反应整个图的层级关系
 	root, err := BuildRootNode(MapTaskInsToGetter(tasks))
 	if err != nil {
 		log.Errorf("dag instance[%s] build task tree failed: %s", dagIns.ID, err)
@@ -172,7 +177,9 @@ func (p *DefParser) InitialDagIns(dagIns *entity.DagInstance) {
 		DagIns: dagIns,
 		Root:   root,
 	}
+	// parser初始化dagIns时，返回的executableTaskIds是入度为0的节点
 	executableTaskIds := tree.Root.GetExecutableTaskIds()
+	// 什么情况会走到这里？
 	if len(executableTaskIds) == 0 {
 		sts, taskInsId := tree.Root.ComputeStatus()
 		switch sts {
@@ -197,8 +204,10 @@ func (p *DefParser) InitialDagIns(dagIns *entity.DagInstance) {
 		return
 	}
 
+	// 在内存中存储该taskTree
 	p.taskTrees.Store(dagIns.ID, tree)
 	taskMap := getTasksMap(tasks)
+	// 将入度为0的节点对应的task推到Executor中
 	for _, tid := range executableTaskIds {
 		GetExecutor().Push(dagIns, taskMap[tid])
 	}
@@ -217,24 +226,22 @@ func (p *DefParser) executeNext(taskIns *entity.TaskInstance) error {
 	if !ok {
 		return fmt.Errorf("dag instance[%s] does not found task tree", taskIns.DagInsID)
 	}
-	ids, find := tree.Root.GetNextTaskIds(taskIns)
-	if !find {
-		return fmt.Errorf("task instance[%s] does not found normal node", taskIns.ID)
+	finishTreeFlag := false
+	if taskIns.TaskID == TaskEndID && taskIns.Status == entity.TaskInstanceStatusSuccess {
+		tree.DagIns.Success()
+		finishTreeFlag = true
 	}
-	// only the tasks which is not success has no next task ids
-	if len(ids) == 0 {
-		treeStatus, taskId := tree.Root.ComputeStatus()
-		switch treeStatus {
-		case TreeStatusRunning:
-			return nil
-		case TreeStatusFailed:
-			tree.DagIns.Fail(fmt.Sprintf("task[%s] failed or canceled", taskId))
-		case TreeStatusBlocked:
-			tree.DagIns.Block(fmt.Sprintf("task[%s] blocked", taskId))
-		case TreeStatusSuccess:
-			tree.DagIns.Success()
-		}
-
+	switch taskIns.Status {
+	case entity.TaskInstanceStatusFailed, entity.TaskInstanceStatusCanceled:
+		tree.DagIns.Fail(fmt.Sprintf("task[%s] failed or canceled", taskIns.TaskID))
+		finishTreeFlag = true
+	case entity.TaskInstanceStatusBlocked:
+		tree.DagIns.Block(fmt.Sprintf("task[%s] blocked", taskIns.TaskID))
+		finishTreeFlag = true
+	default:
+		// entity.TaskInstanceStatusRunning
+	}
+	if finishTreeFlag {
 		// tree has already completed, delete from map
 		p.taskTrees.Delete(taskIns.DagInsID)
 		if err := GetStore().PatchDagIns(&entity.DagInstance{
@@ -244,7 +251,14 @@ func (p *DefParser) executeNext(taskIns *entity.TaskInstance) error {
 		}); err != nil {
 			return err
 		}
+	}
 
+	ids, find := tree.Root.GetNextTaskIds(taskIns)
+	if !find {
+		return fmt.Errorf("task instance[%s] does not found normal node", taskIns.ID)
+	}
+	// only the tasks which is not success has no next task ids
+	if len(ids) == 0 {
 		return nil
 	}
 	if taskIns.Reason == ReasonSuccessAfterCanceled {
@@ -307,7 +321,7 @@ func (p *DefParser) getTaskTree(dagInsId string) (*TaskTree, bool) {
 	return tasks.(*TaskTree), true
 }
 
-// EntryTaskIns
+// EntryTaskIns 将taskIns送到parser的某个worker中进行解析
 func (p *DefParser) EntryTaskIns(taskIns *entity.TaskInstance) {
 	murmurHash := murmur3.New32()
 	// murmur3 hash does not return error, so we don't need to handle it

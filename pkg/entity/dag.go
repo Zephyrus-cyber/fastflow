@@ -20,13 +20,16 @@ func NewDag() *Dag {
 
 // Dag
 type Dag struct {
-	BaseInfo `yaml:",inline" json:",inline" bson:"inline"`
-	Name     string    `yaml:"name,omitempty" json:"name,omitempty" bson:"name,omitempty"`
-	Desc     string    `yaml:"desc,omitempty" json:"desc,omitempty" bson:"desc,omitempty"`
-	Cron     string    `yaml:"cron,omitempty" json:"cron,omitempty" bson:"cron,omitempty"`
-	Vars     DagVars   `yaml:"vars,omitempty" json:"vars,omitempty" bson:"vars,omitempty"`
-	Status   DagStatus `yaml:"status,omitempty" json:"status,omitempty" bson:"status,omitempty"`
-	Tasks    []Task    `yaml:"tasks,omitempty" json:"tasks,omitempty" bson:"tasks,omitempty"`
+	BaseInfo        `yaml:",inline" json:",inline" bson:"inline"`
+	Name            string    `yaml:"name,omitempty" json:"name,omitempty" bson:"name,omitempty"`
+	Desc            string    `yaml:"desc,omitempty" json:"desc,omitempty" bson:"desc,omitempty"`
+	Cron            string    `yaml:"cron,omitempty" json:"cron,omitempty" bson:"cron,omitempty"`
+	Vars            DagVars   `yaml:"vars,omitempty" json:"vars,omitempty" bson:"vars,omitempty"`
+	Status          DagStatus `yaml:"status,omitempty" json:"status,omitempty" bson:"status,omitempty"`
+	Tasks           []Task    `yaml:"tasks,omitempty" json:"tasks,omitempty" bson:"tasks,omitempty"`
+	BntID           string    `yaml:"bntId,omitempty" json:"bntId,omitempty" bson:"bntId,omitempty"`
+	ResourceVersion string    `yaml:"resourceVersion,omitempty" json:"resourceVersion,omitempty" bson:"resourceVersion,omitempty"`
+	ValidVersionSeq uint64    `yaml:"validVersionSeq" json:"validVersionSeq" bson:"validVersionSeq"`
 }
 
 // SpecifiedVar
@@ -217,7 +220,7 @@ func (dagIns *DagInstance) VarsIterator() utils.KeyValueIterator {
 	}
 }
 
-// Success the dag instance
+// Run the dag instance
 func (dagIns *DagInstance) Run() {
 	dagIns.executeHook(HookDagInstance.BeforeRun)
 	dagIns.Status = DagInstanceStatusRunning

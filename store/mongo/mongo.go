@@ -431,6 +431,9 @@ func (s *Store) ListTaskInstance(input *mod.ListTaskInstanceInput) ([]*entity.Ta
 	if input.DagInsID != "" {
 		query["dagInsId"] = input.DagInsID
 	}
+	if input.TaskID != "" {
+		query["taskId"] = input.TaskID
+	}
 	opt := &options.FindOptions{}
 	if len(input.SelectField) > 0 {
 		fields := bson.M{}

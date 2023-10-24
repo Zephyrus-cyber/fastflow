@@ -60,8 +60,10 @@ func NewDefExecutor(timeout time.Duration, workers int) *DefExecutor {
 // Init
 func (e *DefExecutor) Init() {
 	e.initWg.Add(1)
+	// 监听initQueue，将该通道中的taskIns初始化并推送到workerQueue中等待处理
 	go e.watchInitQueue()
 
+	// 启动多个worker消费workerQueue中的任务，执行对应的Action
 	for i := 0; i < e.workerNumber; i++ {
 		e.workerWg.Add(1)
 		go e.subWorkerQueue()
@@ -118,7 +120,7 @@ func (e *DefExecutor) initWorkerTask(dagIns *entity.DagInstance, taskIns *entity
 	e.workerQueue <- taskIns
 }
 
-// Push task to execute
+// Push task to execute 由parser调用该接口，将解析好的任务交给executor模块等待执行（分成init和execute两部分）
 func (e *DefExecutor) Push(dagIns *entity.DagInstance, taskIns *entity.TaskInstance) {
 	isActive, err := taskIns.DoPreCheck(dagIns)
 	if err != nil {
@@ -154,6 +156,7 @@ func (e *DefExecutor) Push(dagIns *entity.DagInstance, taskIns *entity.TaskInsta
 	}
 
 	// init task in single queue to prevent double check map
+	// 首先将taskIns初始化
 	e.initQueue <- &initPayload{
 		dagIns:  dagIns,
 		taskIns: taskIns,
@@ -175,6 +178,7 @@ func (e *DefExecutor) workerDo(taskIns *entity.TaskInstance) {
 	err := e.runAction(taskIns)
 	e.handleTaskError(taskIns, err)
 	e.cancelMap.Delete(taskIns.ID)
+	// 处理完该任务后，交给parser解析获得下一批可执行的任务
 	GetParser().EntryTaskIns(taskIns)
 	goevent.Publish(&event.TaskCompleted{
 		TaskIns: taskIns,
