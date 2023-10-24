@@ -3,8 +3,8 @@ package mod
 import (
 	"time"
 
-	"github.com/shiningrush/fastflow/pkg/entity"
-	"github.com/shiningrush/fastflow/pkg/entity/run"
+	"github.com/etherealiy/fastflow/pkg/entity"
+	"github.com/etherealiy/fastflow/pkg/entity/run"
 )
 
 var (

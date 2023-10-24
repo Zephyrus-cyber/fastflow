@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shiningrush/fastflow/pkg/entity"
+	"github.com/etherealiy/fastflow/pkg/entity"
 )
 
 var _ Commander = (*DefCommander)(nil)

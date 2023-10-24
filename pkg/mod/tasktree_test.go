@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/shiningrush/fastflow/pkg/entity"
+	"github.com/etherealiy/fastflow/pkg/entity"
 	"github.com/stretchr/testify/assert"
 )
 

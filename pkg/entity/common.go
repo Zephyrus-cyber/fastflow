@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/shiningrush/fastflow/store"
+	"github.com/etherealiy/fastflow/store"
 )
 
 // BaseInfo

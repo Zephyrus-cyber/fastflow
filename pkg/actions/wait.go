@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/shiningrush/fastflow/pkg/entity/run"
+	"github.com/etherealiy/fastflow/pkg/entity/run"
 )
 
 const (

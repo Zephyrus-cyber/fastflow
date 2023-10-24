@@ -5,9 +5,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/shiningrush/fastflow/pkg/entity/run"
-	"github.com/shiningrush/fastflow/pkg/log"
-	"github.com/shiningrush/fastflow/pkg/utils"
+	"github.com/etherealiy/fastflow/pkg/entity/run"
+	"github.com/etherealiy/fastflow/pkg/log"
+	"github.com/etherealiy/fastflow/pkg/utils"
 )
 
 // Task

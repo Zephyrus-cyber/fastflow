@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiningrush/fastflow/pkg/entity"
-	"github.com/shiningrush/fastflow/pkg/log"
+	"github.com/etherealiy/fastflow/pkg/entity"
+	"github.com/etherealiy/fastflow/pkg/log"
 )
 
 const DefFailedReason = "force failed by watch dog because it execute too long"

@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shiningrush/fastflow/pkg/render"
-	"github.com/shiningrush/fastflow/pkg/utils/value"
+	"github.com/etherealiy/fastflow/pkg/render"
+	"github.com/etherealiy/fastflow/pkg/utils/value"
 
+	"github.com/etherealiy/fastflow/pkg/entity"
+	"github.com/etherealiy/fastflow/pkg/entity/run"
+	"github.com/etherealiy/fastflow/pkg/event"
+	"github.com/etherealiy/fastflow/pkg/log"
 	"github.com/mitchellh/mapstructure"
-	"github.com/shiningrush/fastflow/pkg/entity"
-	"github.com/shiningrush/fastflow/pkg/entity/run"
-	"github.com/shiningrush/fastflow/pkg/event"
-	"github.com/shiningrush/fastflow/pkg/log"
 	"github.com/shiningrush/goevent"
 )
 

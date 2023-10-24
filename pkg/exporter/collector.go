@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"sync/atomic"
 
+	"github.com/etherealiy/fastflow/pkg/entity"
+	"github.com/etherealiy/fastflow/pkg/event"
+	"github.com/etherealiy/fastflow/pkg/mod"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/shiningrush/fastflow/pkg/entity"
-	"github.com/shiningrush/fastflow/pkg/event"
-	"github.com/shiningrush/fastflow/pkg/mod"
 	"github.com/shiningrush/goevent"
 )
 

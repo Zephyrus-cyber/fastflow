@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/shiningrush/fastflow/store"
+	"github.com/etherealiy/fastflow/store"
 	"github.com/stretchr/testify/assert"
 )
 
