@@ -9,7 +9,7 @@ import (
 
 const (
 	virtualTaskRootID = "_virtual_root"
-	TaskEndID         = "End"
+	TaskEndID         = "END"
 )
 
 // TaskInfoGetter taskNode和taskIns均实现了该接口

@@ -12,8 +12,8 @@ var (
 	mutex     sync.Mutex
 )
 
-// InitFlakeGenerator
-func InitFlakeGenerator(machineId uint16) {
+// InitFlakeGenerator 单实例
+func InitFlakeGenerator() {
 	mutex.Lock()
 	defer mutex.Unlock()
 
@@ -21,12 +21,23 @@ func InitFlakeGenerator(machineId uint16) {
 		return
 	}
 
-	generator = sonyflake.NewSonyflake(sonyflake.Settings{
-		MachineID: func() (uint16, error) {
-			return machineId, nil
-		},
-	})
+	generator = sonyflake.NewSonyflake(sonyflake.Settings{})
 }
+
+//func InitFlakeGenerator(machineId uint16) {
+//	mutex.Lock()
+//	defer mutex.Unlock()
+//
+//	if generator != nil {
+//		return
+//	}
+//
+//	generator = sonyflake.NewSonyflake(sonyflake.Settings{
+//		MachineID: func() (uint16, error) {
+//			return machineId, nil
+//		},
+//	})
+//}
 
 // NextID
 func NextID() uint64 {

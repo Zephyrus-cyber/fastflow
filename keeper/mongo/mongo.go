@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/etherealiy/fastflow/keeper"
 	"github.com/etherealiy/fastflow/pkg/event"
 	"github.com/etherealiy/fastflow/pkg/log"
 	"github.com/etherealiy/fastflow/pkg/mod"
@@ -30,7 +29,8 @@ type Keeper struct {
 	heartbeatClsName string
 	mutexClsName     string
 
-	leaderFlag  atomic.Value
+	leaderFlag atomic.Value
+	// 单实例版不使用keyNumber
 	keyNumber   int
 	mongoClient *mongo.Client
 	mongoDb     *mongo.Database
@@ -72,7 +72,8 @@ func (k *Keeper) Init() error {
 	if err := k.readOpt(); err != nil {
 		return err
 	}
-	store.InitFlakeGenerator(uint16(k.WorkerNumber()))
+	// 使用默认的低16位的ip作为machine id
+	store.InitFlakeGenerator()
 
 	ctx, cancel := context.WithTimeout(context.Background(), k.opt.Timeout)
 	defer cancel()
@@ -160,11 +161,11 @@ func (k *Keeper) readOpt() error {
 		k.opt.Timeout = time.Second * 2
 	}
 
-	number, err := keeper.CheckWorkerKey(k.opt.Key)
-	if err != nil {
-		return err
-	}
-	k.keyNumber = number
+	//number, err := keeper.CheckWorkerKey(k.opt.Key)
+	//if err != nil {
+	//	return err
+	//}
+	//k.keyNumber = number
 
 	k.leaderClsName = "election"
 	k.heartbeatClsName = "heartbeat"
