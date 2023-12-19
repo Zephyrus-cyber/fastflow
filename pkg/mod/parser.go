@@ -251,6 +251,7 @@ func (p *DefParser) executeNext(taskIns *entity.TaskInstance) error {
 		}); err != nil {
 			return err
 		}
+		return nil
 	}
 
 	ids, find := tree.Root.GetNextTaskIds(taskIns)
