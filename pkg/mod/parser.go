@@ -223,8 +223,24 @@ func getTasksMap(tasks []*entity.TaskInstance) map[string]*entity.TaskInstance {
 
 func (p *DefParser) executeNext(taskIns *entity.TaskInstance) error {
 	tree, ok := p.getTaskTree(taskIns.DagInsID)
+	// tree被删除时，有可能是因为其他并发执行的任务失败了，删除了taskTree并修改dagInstance状态为failed
 	if !ok {
-		return fmt.Errorf("dag instance[%s] does not found task tree", taskIns.DagInsID)
+		dagIns, err := GetStore().ListDagInstance(&ListDagInstanceInput{
+			DagID: tree.DagIns.DagID,
+			Status: []entity.DagInstanceStatus{
+				entity.DagInstanceStatusFailed,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("task tree not found and get dag instance[%s] failed: %s", taskIns.DagInsID, err)
+		}
+		if len(dagIns) != 1 {
+			return fmt.Errorf("dag instance[%s] does not found task tree", taskIns.DagInsID)
+		} else {
+			// 已经有任务失败了，取消执行
+			log.Infof("dag instance[%s] is already reported as failed, stopping to execute task[%s]", taskIns.DagInsID, taskIns.TaskID)
+			return nil
+		}
 	}
 	finishTreeFlag := false
 	if taskIns.TaskID == TaskEndID && taskIns.Status == entity.TaskInstanceStatusSuccess {
