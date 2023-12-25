@@ -233,7 +233,6 @@ func (p *DefParser) executeNext(taskIns *entity.TaskInstance) error {
 			return fmt.Errorf("dag instance[%s] does not found task tree", taskIns.DagInsID)
 		} else {
 			// 已经有任务失败了，取消执行
-			log.Infof("dag instance[%s] is already reported as failed, stopping to execute task[%s]", taskIns.DagInsID, taskIns.TaskID)
 			return nil
 		}
 	}
