@@ -153,6 +153,8 @@ type TaskInstance struct {
 
 	// it used to buffer traces, and persist when status changed
 	bufTraces []TraceInfo
+
+	TimeUsed string `json:"timeUsed,omitempty" bson:"timeUsed,omitempty"`
 }
 
 // TraceInfo
@@ -207,6 +209,11 @@ func (t *TaskInstance) InitialDep(ctx run.ExecuteContext, patch func(*TaskInstan
 func (t *TaskInstance) SetStatus(s TaskInstanceStatus) error {
 	t.Status = s
 	patch := &TaskInstance{BaseInfo: BaseInfo{ID: t.ID}, Status: t.Status, Reason: t.Reason}
+	if s == TaskInstanceStatusEnding {
+		begin := time.Unix(t.GetBaseInfo().CreatedAt, 0)
+		duration := time.Since(begin)
+		patch.TimeUsed = fmt.Sprintf("%.3fs", duration.Seconds())
+	}
 	if len(t.bufTraces) != 0 {
 		patch.Traces = append(t.Traces, t.bufTraces...)
 	}
