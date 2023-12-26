@@ -209,10 +209,8 @@ func (t *TaskInstance) InitialDep(ctx run.ExecuteContext, patch func(*TaskInstan
 func (t *TaskInstance) SetStatus(s TaskInstanceStatus) error {
 	t.Status = s
 	patch := &TaskInstance{BaseInfo: BaseInfo{ID: t.ID}, Status: t.Status, Reason: t.Reason}
-	if s == TaskInstanceStatusEnding {
-		begin := time.Unix(t.GetBaseInfo().CreatedAt, 0)
-		duration := time.Since(begin)
-		patch.TimeUsed = fmt.Sprintf("%.3fs", duration.Seconds())
+	if s == TaskInstanceStatusSuccess {
+		patch.TimeUsed = t.TimeUsed
 	}
 	if len(t.bufTraces) != 0 {
 		patch.Traces = append(t.Traces, t.bufTraces...)
@@ -260,6 +258,7 @@ func (t *TaskInstance) Run(params interface{}, act run.Action) (err error) {
 
 	}()
 
+	begin := time.Now()
 	if t.Status == TaskInstanceStatusInit || t.Status == TaskInstanceStatusContinue {
 		beforeAct, ok := act.(run.BeforeAction)
 		if ok {
@@ -287,6 +286,8 @@ func (t *TaskInstance) Run(params interface{}, act run.Action) (err error) {
 				return fmt.Errorf("run after failed: %w", err)
 			}
 		}
+		duration := time.Since(begin)
+		t.TimeUsed = fmt.Sprintf("%.3fs", duration.Seconds())
 		if err := t.SetStatus(TaskInstanceStatusSuccess); err != nil {
 			return err
 		}
