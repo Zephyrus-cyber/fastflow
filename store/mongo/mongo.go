@@ -171,6 +171,9 @@ func (s *Store) PatchTaskIns(taskIns *entity.TaskInstance) error {
 	if len(taskIns.Traces) > 0 {
 		update["traces"] = taskIns.Traces
 	}
+	if taskIns.TimeUsed != "" {
+		update["timeUsed"] = taskIns.TimeUsed
+	}
 	update = bson.M{
 		"$set": update,
 	}
