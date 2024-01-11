@@ -3,6 +3,7 @@ package entity
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/etherealiy/fastflow/pkg/mod"
 	"strings"
 	"sync"
 
@@ -255,6 +256,49 @@ func (dagIns *DagInstance) Retry(taskInsIds []string) error {
 // Continue tasks, it is just set a command, command will execute by Parser
 func (dagIns *DagInstance) Continue(taskInsIds []string) error {
 	return dagIns.genCmd(taskInsIds, CommandNameContinue)
+}
+
+func (dagIns *DagInstance) GetTotalTaskCnt() int {
+	taskIns, err := mod.GetStore().ListTaskInstance(&mod.ListTaskInstanceInput{
+		DagInsID: dagIns.ID,
+	})
+	if err != nil {
+		return 0
+	}
+	return len(taskIns)
+}
+
+func (dagIns *DagInstance) GetSuccessTaskCnt() int {
+	taskIns, err := mod.GetStore().ListTaskInstance(&mod.ListTaskInstanceInput{
+		DagInsID: dagIns.ID,
+		Status:   []TaskInstanceStatus{TaskInstanceStatusSuccess},
+	})
+	if err != nil {
+		return 0
+	}
+	return len(taskIns)
+}
+
+func (dagIns *DagInstance) GetRunningTaskCnt() int {
+	taskIns, err := mod.GetStore().ListTaskInstance(&mod.ListTaskInstanceInput{
+		DagInsID: dagIns.ID,
+		Status:   []TaskInstanceStatus{TaskInstanceStatusRunning},
+	})
+	if err != nil {
+		return 0
+	}
+	return len(taskIns)
+}
+
+func (dagIns *DagInstance) GetFailedTaskCnt() int {
+	taskIns, err := mod.GetStore().ListTaskInstance(&mod.ListTaskInstanceInput{
+		DagInsID: dagIns.ID,
+		Status:   []TaskInstanceStatus{TaskInstanceStatusFailed},
+	})
+	if err != nil {
+		return 0
+	}
+	return len(taskIns)
 }
 
 func (dagIns *DagInstance) genCmd(taskInsIds []string, cmdName CommandName) error {
