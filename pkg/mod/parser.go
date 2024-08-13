@@ -243,7 +243,7 @@ func (p *DefParser) executeNext(taskIns *entity.TaskInstance) error {
 	}
 	switch taskIns.Status {
 	case entity.TaskInstanceStatusFailed, entity.TaskInstanceStatusCanceled:
-		tree.DagIns.Fail(fmt.Sprintf("task[%s] failed or canceled", taskIns.TaskID))
+		tree.DagIns.Fail(fmt.Sprintf("task[%s] failed or canceled, reason: %s", taskIns.TaskID, taskIns.Reason))
 		finishTreeFlag = true
 	case entity.TaskInstanceStatusBlocked:
 		tree.DagIns.Block(fmt.Sprintf("task[%s] blocked", taskIns.TaskID))

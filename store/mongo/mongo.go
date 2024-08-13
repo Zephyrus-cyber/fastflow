@@ -33,7 +33,7 @@ type StoreOption struct {
 	Timeout time.Duration
 	// the prefix will append to the database
 	Prefix string
-	// If it uses GridFS Buckets to store dag and dagIns
+	// If it uses GridFS Buckets to store dag
 	WithGridFS bool
 }
 
@@ -47,8 +47,7 @@ type Store struct {
 	mongoClient *mongo.Client
 	mongoDb     *mongo.Database
 
-	dagBucket    *gridfs.Bucket
-	dagInsBucket *gridfs.Bucket
+	dagBucket *gridfs.Bucket
 }
 
 // NewStore
@@ -81,10 +80,6 @@ func (s *Store) Init() error {
 		s.dagBucket, err = gridfs.NewBucket(s.mongoDb, options.GridFSBucket().SetName(s.dagClsName))
 		if err != nil {
 			return fmt.Errorf("create dag bucket failed: %w", err)
-		}
-		s.dagInsBucket, err = gridfs.NewBucket(s.mongoDb, options.GridFSBucket().SetName(s.dagInsClsName))
-		if err != nil {
-			return fmt.Errorf("create dag_instance bucket failed: %w", err)
 		}
 	}
 
@@ -133,17 +128,34 @@ func (s *Store) CreateDag(dag *entity.Dag) error {
 	if !s.opt.WithGridFS {
 		return s.genericCreate(dag, s.dagClsName)
 	} else {
-		return s.uploadToBucket(dag, s.dagBucket)
+		if dag.BaseInfo.ID == "" {
+			dag.BaseInfo.ID = primitive.NewObjectID().Hex()
+		}
+		dag.BaseInfo.CreatedAt = time.Now().Unix()
+		dag.BaseInfo.UpdatedAt = dag.BaseInfo.CreatedAt
+		return s.uploadToBucket(dag, s.dagBucket, nil)
 	}
 }
 
 // CreateDagIns
 func (s *Store) CreateDagIns(dagIns *entity.DagInstance) error {
-	if !s.opt.WithGridFS {
-		return s.genericCreate(dagIns, s.dagInsClsName)
-	} else {
-		return s.uploadToBucket(dagIns, s.dagInsBucket)
-	}
+	return s.genericCreate(dagIns, s.dagInsClsName)
+	//if !s.opt.WithGridFS {
+	//	return s.genericCreate(dagIns, s.dagInsClsName)
+	//} else {
+	//	if dagIns.BaseInfo.ID == "" {
+	//		dagIns.BaseInfo.ID = primitive.NewObjectID().Hex()
+	//	}
+	//	dagIns.BaseInfo.CreatedAt = time.Now().Unix()
+	//	dagIns.BaseInfo.UpdatedAt = dagIns.BaseInfo.CreatedAt
+	//	metadata := map[string]interface{}{
+	//		"status":   dagIns.Status,
+	//		"worker":   dagIns.Worker,
+	//		"updateAt": dagIns.UpdatedAt,
+	//		"cmd":      dagIns.Cmd,
+	//	}
+	//	return s.uploadToBucket(dagIns, s.dagInsBucket, metadata)
+	//}
 }
 
 // CreateTaskIns
@@ -168,21 +180,19 @@ func (s *Store) genericCreate(input entity.BaseInfoGetter, clsName string) error
 	return nil
 }
 
-func (s *Store) uploadToBucket(input entity.BaseInfoGetter, bucket *gridfs.Bucket) error {
-	baseInfo := input.GetBaseInfo()
-	baseInfo.Initial()
-
+func (s *Store) uploadToBucket(input entity.BaseInfoGetter, bucket *gridfs.Bucket, metadata map[string]interface{}) error {
 	jsonBytes, err := json.Marshal(input)
 	if err != nil {
 		return err
 	}
 
-	id, err := primitive.ObjectIDFromHex(baseInfo.ID)
+	id, err := primitive.ObjectIDFromHex(input.GetBaseInfo().ID)
 	if err != nil {
 		return err
 	}
 
-	err = bucket.UploadFromStreamWithID(id, fmt.Sprintf("%s.json", baseInfo.ID), bytes.NewReader(jsonBytes))
+	uploadOptions := options.GridFSUpload().SetMetadata(metadata)
+	err = bucket.UploadFromStreamWithID(id, fmt.Sprintf("%s.json", input.GetBaseInfo().ID), bytes.NewReader(jsonBytes), uploadOptions)
 	if err != nil {
 		return fmt.Errorf("insert instance failed: %w", err)
 	}
@@ -237,77 +247,35 @@ func (s *Store) PatchTaskIns(taskIns *entity.TaskInstance) error {
 
 // PatchDagIns
 func (s *Store) PatchDagIns(dagIns *entity.DagInstance, mustsPatchFields ...string) error {
-	if !s.opt.WithGridFS {
-		update := bson.M{
-			"updatedAt": time.Now().Unix(),
-		}
 
-		if dagIns.ShareData != nil {
-			update["shareData"] = dagIns.ShareData
-		}
-		if dagIns.Status != "" {
-			update["status"] = dagIns.Status
-		}
-		if utils.StringsContain(mustsPatchFields, "Cmd") || dagIns.Cmd != nil {
-			update["cmd"] = dagIns.Cmd
-		}
-		if dagIns.Worker != "" {
-			update["worker"] = dagIns.Worker
-		}
-		if utils.StringsContain(mustsPatchFields, "Reason") || dagIns.Reason != "" {
-			update["reason"] = dagIns.Reason
-		}
+	update := bson.M{
+		"updatedAt": time.Now().Unix(),
+	}
 
-		update = bson.M{
-			"$set": update,
-		}
+	if dagIns.ShareData != nil {
+		update["shareData"] = dagIns.ShareData
+	}
+	if dagIns.Status != "" {
+		update["status"] = dagIns.Status
+	}
+	if utils.StringsContain(mustsPatchFields, "Cmd") || dagIns.Cmd != nil {
+		update["cmd"] = dagIns.Cmd
+	}
+	if dagIns.Worker != "" {
+		update["worker"] = dagIns.Worker
+	}
+	if utils.StringsContain(mustsPatchFields, "Reason") || dagIns.Reason != "" {
+		update["reason"] = dagIns.Reason
+	}
 
-		ctx, cancel := context.WithTimeout(context.TODO(), s.opt.Timeout)
-		defer cancel()
-		if _, err := s.mongoDb.Collection(s.dagInsClsName).UpdateOne(ctx, bson.M{"_id": dagIns.ID}, update); err != nil {
-			return fmt.Errorf("patch dag instance failed: %w", err)
-		}
-	} else {
-		id, err := primitive.ObjectIDFromHex(dagIns.ID)
-		if err != nil {
-			return err
-		}
-		fileBuffer := bytes.NewBuffer(nil)
-		_, err = s.dagInsBucket.DownloadToStream(id, fileBuffer)
-		if err != nil {
-			return fmt.Errorf("download dag instance failed: %w", err)
-		}
-		updatedDagIns := &entity.DagInstance{}
-		err = json.Unmarshal(fileBuffer.Bytes(), updatedDagIns)
-		if err != nil {
-			return err
-		}
-		updatedDagIns.UpdatedAt = time.Now().Unix()
-		if dagIns.ShareData != nil {
-			updatedDagIns.ShareData = dagIns.ShareData
-		}
-		if dagIns.Status != "" {
-			updatedDagIns.Status = dagIns.Status
-		}
-		if utils.StringsContain(mustsPatchFields, "Cmd") || dagIns.Cmd != nil {
-			updatedDagIns.Cmd = dagIns.Cmd
-		}
-		if dagIns.Worker != "" {
-			updatedDagIns.Worker = dagIns.Worker
-		}
-		if utils.StringsContain(mustsPatchFields, "Reason") || dagIns.Reason != "" {
-			updatedDagIns.Reason = dagIns.Reason
-		}
-		// delete the updatedDagIns file
-		err = s.dagInsBucket.Delete(id)
-		if err != nil {
-			return fmt.Errorf("delete dag instance from bucket failed: %w", err)
-		}
-		// upload the updatedDagIns file
-		err = s.uploadToBucket(updatedDagIns, s.dagInsBucket)
-		if err != nil {
-			return fmt.Errorf("upload updatedDagIns dag instance failed: %w", err)
-		}
+	update = bson.M{
+		"$set": update,
+	}
+
+	ctx, cancel := context.WithTimeout(context.TODO(), s.opt.Timeout)
+	defer cancel()
+	if _, err := s.mongoDb.Collection(s.dagInsClsName).UpdateOne(ctx, bson.M{"_id": dagIns.ID}, update); err != nil {
+		return fmt.Errorf("patch dag instance failed: %w", err)
 	}
 
 	goevent.Publish(&event.DagInstancePatched{
@@ -327,20 +295,15 @@ func (s *Store) UpdateDag(dag *entity.Dag) error {
 	if !s.opt.WithGridFS {
 		return s.genericUpdate(dag, s.dagClsName)
 	} else {
-		return s.updateFileInBucket(dag, s.dagBucket)
+		dag.UpdatedAt = time.Now().Unix()
+		return s.uploadToBucket(dag, s.dagBucket, nil)
 	}
 }
 
 // UpdateDagIns
 func (s *Store) UpdateDagIns(dagIns *entity.DagInstance) error {
-	if !s.opt.WithGridFS {
-		if err := s.genericUpdate(dagIns, s.dagInsClsName); err != nil {
-			return err
-		}
-	} else {
-		if err := s.updateFileInBucket(dagIns, s.dagInsBucket); err != nil {
-			return err
-		}
+	if err := s.genericUpdate(dagIns, s.dagInsClsName); err != nil {
+		return err
 	}
 
 	goevent.Publish(&event.DagInstanceUpdated{Payload: dagIns})
@@ -369,33 +332,6 @@ func (s *Store) genericUpdate(input entity.BaseInfoGetter, clsName string) error
 	return nil
 }
 
-func (s *Store) updateFileInBucket(input entity.BaseInfoGetter, bucket *gridfs.Bucket) error {
-	baseInfo := input.GetBaseInfo()
-	baseInfo.Update()
-
-	id, err := primitive.ObjectIDFromHex(baseInfo.ID)
-	if err != nil {
-		return err
-	}
-
-	// delete the origin file
-	err = s.dagInsBucket.Delete(id)
-	if err != nil {
-		return fmt.Errorf("delete file from bucket failed: %w", err)
-	}
-	// upload the new file
-	jsonBytes, err := json.Marshal(input)
-	if err != nil {
-		return err
-	}
-
-	err = bucket.UploadFromStreamWithID(id, fmt.Sprintf("%s.json", baseInfo.ID), bytes.NewReader(jsonBytes))
-	if err != nil {
-		return fmt.Errorf("insert instance failed: %w", err)
-	}
-	return nil
-}
-
 // BatchUpdateDagIns
 func (s *Store) BatchUpdateDagIns(dagIns []*entity.DagInstance) error {
 	ctx, cancel := context.WithTimeout(context.TODO(), s.opt.Timeout)
@@ -415,17 +351,11 @@ func (s *Store) BatchUpdateDagIns(dagIns []*entity.DagInstance) error {
 	for i := range dagIns {
 		wg.Add(1)
 		go func(dagIns *entity.DagInstance, ch chan error) {
-			if !s.opt.WithGridFS {
-				dagIns.Update()
-				if _, err := s.mongoDb.Collection(s.dagInsClsName).ReplaceOne(
-					ctx,
-					bson.M{"_id": dagIns.ID}, dagIns); err != nil {
-					errChan <- fmt.Errorf("batch update dag instance failed: %w", err)
-				}
-			} else {
-				if err := s.updateFileInBucket(dagIns, s.dagInsBucket); err != nil {
-					errChan <- fmt.Errorf("batch update dag instance failed: %w", err)
-				}
+			dagIns.Update()
+			if _, err := s.mongoDb.Collection(s.dagInsClsName).ReplaceOne(
+				ctx,
+				bson.M{"_id": dagIns.ID}, dagIns); err != nil {
+				errChan <- fmt.Errorf("batch update dag instance failed: %w", err)
 			}
 
 			wg.Done()
@@ -489,24 +419,8 @@ func (s *Store) GetDag(dagId string) (*entity.Dag, error) {
 // GetDagInstance
 func (s *Store) GetDagInstance(dagInsId string) (*entity.DagInstance, error) {
 	ret := new(entity.DagInstance)
-	if !s.opt.WithGridFS {
-		if err := s.genericGet(s.dagInsClsName, dagInsId, ret); err != nil {
-			return nil, err
-		}
-	} else {
-		id, err := primitive.ObjectIDFromHex(dagInsId)
-		if err != nil {
-			return nil, err
-		}
-		fileBuffer := bytes.NewBuffer(nil)
-		_, err = s.dagBucket.DownloadToStream(id, fileBuffer)
-		if err != nil {
-			return nil, err
-		}
-		err = json.Unmarshal(fileBuffer.Bytes(), ret)
-		if err != nil {
-			return nil, err
-		}
+	if err := s.genericGet(s.dagInsClsName, dagInsId, ret); err != nil {
+		return nil, err
 	}
 
 	return ret, nil
@@ -542,87 +456,34 @@ func (s *Store) ListDag(input *mod.ListDagInput) ([]*entity.Dag, error) {
 // ListDagInstance
 func (s *Store) ListDagInstance(input *mod.ListDagInstanceInput) ([]*entity.DagInstance, error) {
 	var ret []*entity.DagInstance
-	if !s.opt.WithGridFS {
-		query := bson.M{}
-		if len(input.Status) > 0 {
-			query["status"] = bson.M{
-				"$in": input.Status,
-			}
-		}
-		if input.Worker != "" {
-			query["worker"] = input.Worker
-		}
-		if input.UpdatedEnd > 0 {
-			query["updatedAt"] = bson.M{
-				"$lte": input.UpdatedEnd,
-			}
-		}
-		if input.HasCmd {
-			query["cmd"] = bson.M{
-				"$ne": nil,
-			}
-		}
-		opt := &options.FindOptions{}
-		if input.Limit > 0 {
-			opt.Limit = &input.Limit
-		}
 
-		err := s.genericList(&ret, s.dagInsClsName, query, opt)
-		if err != nil {
-			return nil, err
+	query := bson.M{}
+	if len(input.Status) > 0 {
+		query["status"] = bson.M{
+			"$in": input.Status,
 		}
-	} else {
-		cursor, err := s.dagInsBucket.Find(nil)
-		if err != nil {
-			return nil, err
+	}
+	if input.Worker != "" {
+		query["worker"] = input.Worker
+	}
+	if input.UpdatedEnd > 0 {
+		query["updatedAt"] = bson.M{
+			"$lte": input.UpdatedEnd,
 		}
+	}
+	if input.HasCmd {
+		query["cmd"] = bson.M{
+			"$ne": nil,
+		}
+	}
+	opt := &options.FindOptions{}
+	if input.Limit > 0 {
+		opt.Limit = &input.Limit
+	}
 
-		type gridfsFile struct {
-			Name   string `bson:"fileName"`
-			Length int64  `bson:"length"`
-		}
-
-		var foundFiles []gridfsFile
-		if err = cursor.All(context.TODO(), &foundFiles); err != nil {
-			return nil, err
-		}
-		for _, file := range foundFiles {
-			fileBuffer := bytes.NewBuffer(nil)
-			_, err = s.dagInsBucket.DownloadToStreamByName(file.Name, fileBuffer)
-			if err != nil {
-				return nil, err
-			}
-			dagIns := &entity.DagInstance{}
-			err = json.Unmarshal(fileBuffer.Bytes(), dagIns)
-			if err != nil {
-				return nil, err
-			}
-			if len(input.Status) > 0 {
-				exist := false
-				for _, st := range input.Status {
-					if st == dagIns.Status {
-						exist = true
-						break
-					}
-				}
-				if !exist {
-					continue
-				}
-			}
-			if input.Worker != "" && input.Worker != dagIns.Worker {
-				continue
-			}
-			if input.UpdatedEnd > 0 && dagIns.UpdatedAt > input.UpdatedEnd {
-				continue
-			}
-			if input.HasCmd && dagIns.Cmd == nil {
-				continue
-			}
-			ret = append(ret, dagIns)
-		}
-		if input.Limit > 0 {
-			ret = ret[:input.Limit]
-		}
+	err := s.genericList(&ret, s.dagInsClsName, query, opt)
+	if err != nil {
+		return nil, err
 	}
 
 	return ret, nil
